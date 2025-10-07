@@ -12,7 +12,8 @@ import { NutritionModule } from './nutrition/nutrition.module';
 import { MembersModule } from './members/members.module';
 import { ShoppingModule } from './shopping/shopping.module';
 import { InvitationsModule } from './invitations/invitations.module';
-import Joi from 'joi';
+
+import * as Joi from 'joi';
 
 @Module({
   imports: [
