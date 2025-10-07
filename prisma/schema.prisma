@@ -1,0 +1,224 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum FamilyRole {
+  OWNER
+  MEMBER
+}
+
+enum ListCategory {
+  MERCEARIA
+  LATICINIOS
+  LIMPEZA
+  HORTIFRUTI
+  BEBIDAS
+  OUTROS
+}
+
+enum TripStatus {
+  OPEN
+  CLOSED
+  CANCELED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  firstname    String
+  lastname     String
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  families           UserFamily[]
+  members            Member[]           @relation("UserAsMember")
+  invitationsCreated FamilyInvitation[] @relation("InvitationCreator")
+
+  ShoppingTrip ShoppingTrip[]
+}
+
+model Family {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users     UserFamily[]
+  members   Member[]
+
+  grocery   GroceryList[]
+  pantry    PantryItem[]
+  mealPlans MealPlan[]
+
+  familyInvitation FamilyInvitation[]
+
+  ShoppingTrip ShoppingTrip[]
+}
+
+model UserFamily {
+  userId    String
+  familyId  String
+  role      FamilyRole @default(MEMBER)
+  createdAt DateTime   @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family Family @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@id([userId, familyId])
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  userId    String?  @unique
+  user      User?    @relation("UserAsMember", fields: [userId], references: [id])
+
+  name        String
+  genero      String
+  idade       Int
+  peso        Float
+  observacoes String?
+  ativo       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model GroceryList {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  weekStart DateTime
+  @@unique([familyId, weekStart], name: "family_weekStart")
+
+  title     String
+  category  ListCategory
+  archived  Boolean   @default(false)
+  items     GroceryListItem[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  ShoppingTrip ShoppingTrip[]
+}
+
+
+model GroceryListItem {
+  id            String       @id @default(cuid())
+  groceryListId String
+  list          GroceryList  @relation(fields: [groceryListId], references: [id], onDelete: Cascade)
+
+  name       String
+  brand      String?
+  unidade    String
+  quantidade Int
+  notes      String?
+  checked    Boolean     @default(false)
+
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  ShoppingTripItem ShoppingTripItem[]
+}
+
+model ShoppingTrip {
+  id           String      @id @default(cuid())
+  familyId     String
+  family       Family      @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  groceryListId String?
+  groceryList   GroceryList? @relation(fields: [groceryListId], references: [id])
+
+  storeName    String
+  status       TripStatus  @default(OPEN)
+  startedAt    DateTime    @default(now())
+  finishedAt   DateTime?
+  totalSpent   Decimal?    @db.Decimal(10, 2)
+
+  createdBy    String
+  creator      User        @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+
+  items        ShoppingTripItem[]
+
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([familyId, status])
+}
+
+model ShoppingTripItem {
+  id         String        @id @default(cuid())
+  tripId     String
+  trip       ShoppingTrip  @relation(fields: [tripId], references: [id], onDelete: Cascade)
+
+  listItemId String?
+  listItem   GroceryListItem? @relation(fields: [listItemId], references: [id])
+
+  name       String
+  brand      String?
+  unidade    String
+  qtyPlanned Int?
+  qtyBought  Int
+  unitPrice  Decimal?     @db.Decimal(10, 2)
+  lineTotal  Decimal?     @db.Decimal(10, 2)
+
+  pantryUpsertedAt DateTime?
+  pantryItemId     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model PantryItem {
+  id         String   @id @default(cuid())
+  familyId   String
+  family     Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  item       String
+  brand      String?
+  unidade    String
+  quantidade Int
+
+  @@unique([familyId, item, unidade, brand])
+}
+
+model MealPlan {
+  id        String   @id @default(cuid())
+  familyId  String
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  weekStart DateTime
+  timezone  String?
+  jsonPlan  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([familyId, weekStart], name: "family_weekStart_plan")
+}
+
+model FamilyInvitation {
+  id        String     @id @default(cuid())
+  familyId  String
+  family    Family     @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  email     String
+  role      FamilyRole @default(MEMBER)
+
+  code       String    @unique
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  canceledAt DateTime?
+
+  createdBy String
+  creator   User       @relation("InvitationCreator", fields: [createdBy], references: [id], onDelete: Cascade)
+
+  createdAt DateTime   @default(now())
+
+  @@index([familyId, email])
+}
