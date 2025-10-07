@@ -12,10 +12,19 @@ import { NutritionModule } from './nutrition/nutrition.module';
 import { MembersModule } from './members/members.module';
 import { ShoppingModule } from './shopping/shopping.module';
 import { InvitationsModule } from './invitations/invitations.module';
+import Joi from 'joi';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+   ConfigModule.forRoot({
+      isGlobal: true,
+      validationSchema: Joi.object({
+        JWT_SECRET: Joi.string().min(16).required(),
+        DATABASE_URL: Joi.string().uri().required(),
+        NODE_ENV: Joi.string().valid('development', 'test', 'production').default('production'),
+        PORT: Joi.number().default(3000),
+      }),
+    }),
     PrismaModule,
     UsersModule,
     AuthModule,

@@ -9,7 +9,9 @@ async function bootstrap() {
 
   app.setGlobalPrefix('api');
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-  app.enableCors();
+  app.enableCors({
+    origin: process.env.ALLOW_ORIGINS?.split(',') ?? '*',
+  });
 
   const swaggerCfg = new DocumentBuilder()
     .setTitle('Cardafly API')
@@ -23,7 +25,8 @@ async function bootstrap() {
   const port = Number(config.get('PORT') ?? 3001);
   const host = (config.get<string>('HOST') ?? '0.0.0.0') as string;
 
-  // >>> ESSA LINHA PRECISA EXISTIR E NÃO PODE ESTAR COMENTADA
+
+
   await app.listen(port, host);
 
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
