@@ -1,6 +1,6 @@
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
-import { createApp, signupAndLogin } from './test-utils';
+import request from 'supertest';
+import { createApp, signup } from './test-utils';
 
 describe('Pantry (e2e)', () => {
   let app: INestApplication;
@@ -8,7 +8,7 @@ describe('Pantry (e2e)', () => {
 
   beforeAll(async () => {
     app = await createApp();
-    ({ token } = await signupAndLogin(app));
+    ({ token } = await signup(app));
   });
 
   afterAll(async () => await app.close());

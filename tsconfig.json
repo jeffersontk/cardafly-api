@@ -16,6 +16,7 @@
     "strictBindCallApply": false,
     "forceConsistentCasingInFileNames": false,
     "noFallthroughCasesInSwitch": false,
-    "types": ["node", "passport", "passport-jwt", "jest"]
+    "types": ["node", "passport", "passport-jwt", "jest"],
+    "esModuleInterop": true,
   }
 }

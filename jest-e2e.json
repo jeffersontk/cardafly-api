@@ -1,12 +1,18 @@
 {
-  "moduleFileExtensions": ["js", "json", "ts"],
+  "moduleFileExtensions": ["ts", "js", "json"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
   "transform": {
-    "^.+\\.ts$": ["ts-jest", { "tsconfig": "tsconfig.json", "diagnostics": false }]
+    "^.+\\.[tj]s$": [
+      "ts-jest",
+      { "tsconfig": "tsconfig.json", "isolatedModules": true, "useESM": false }
+    ]
   },
-  "moduleNameMapper": { "^src/(.*)$": "<rootDir>/src/$1" },
-  "globals": { "ts-jest": { "tsconfig": "tsconfig.jest.json" } },
-  "setupFilesAfterEnv": ["<rootDir>/src/test/setup.ts"] 
+  "transformIgnorePatterns": [
+    "/node_modules/(?!(@noble|@paralleldrive)/)"
+  ],
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1"
+  }
 }

@@ -1,7 +1,6 @@
-import { INestApplication, ValidationPipe } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import * as request from 'supertest';
-import { AppModule } from '../app.module';
+import { INestApplication } from '@nestjs/common';
+import request from 'supertest';
+import { createApp, signup, myFamilyId, bearer, randEmail } from './test-utils';
 
 describe('Invitations (e2e)', () => {
   let app: INestApplication;
@@ -11,89 +10,64 @@ describe('Invitations (e2e)', () => {
   let familyId = '';
 
   beforeAll(async () => {
-    const mod = await Test.createTestingModule({ imports: [AppModule] }).compile();
-    app = mod.createNestApplication();
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-    app.setGlobalPrefix('api');
-    app.useGlobalPipes(new ValidationPipe({ whitelist: true, transform: true }));
-
-    await app.init();
+    app = await createApp();
 
     // signup owner
-    await request(app.getHttpServer())
-      .post('/api/auth/signup')
-      .send({
-        email: `owner_${Date.now()}@mail.com`,
-        firstname: 'Owner',
-        lastname: 'Fam',
-        password: 'P@ssw0rd',
-      })
-      .expect(201)
-      .then((r) => (tokenOwner = r.body.access_token));
+    ({ token: tokenOwner } = await signup(app, {
+      email: `owner_${Date.now()}@mail.com`,
+      firstname: 'Owner',
+      lastname: 'Fam',
+    }));
 
-    // pega family do owner
-    await request(app.getHttpServer())
-      .get('/api/families/mine')
-      .set('Authorization', `Bearer ${tokenOwner}`)
-      .expect(200)
-      .then((r) => (familyId = r.body[0].id));
+    // pega (ou cria) family do owner
+    familyId = await myFamilyId(app, tokenOwner);
 
     // signup guest
     const guestEmail = `guest_${Date.now()}@mail.com`;
-    await request(app.getHttpServer())
-      .post('/api/auth/signup')
-      .send({
-        email: guestEmail,
-        firstname: 'Guest',
-        lastname: 'Solo',
-        password: 'P@ssw0rd',
-      })
-      .expect(201)
-      .then((r) => (tokenGuest = r.body.access_token));
+    ({ token: tokenGuest } = await signup(app, {
+      email: guestEmail,
+      firstname: 'Guest',
+      lastname: 'Solo',
+    }));
 
     // owner cria convite para guest
-    await request(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .post('/api/invitations')
-      .set('Authorization', `Bearer ${tokenOwner}`)
+      .set(bearer(tokenOwner))
       .send({ email: guestEmail }) // default role MEMBER
-      .expect(201)
-      .then((r) => (inviteCode = r.body.code));
+      .expect(201);
+
+    inviteCode = res.body.code;
   });
 
-  afterAll(async () => {
-    await app.close();
-  });
+  afterAll(async () => await app.close());
 
   it('GET /api/invitations -> lista convites da família', async () => {
-    await request(app.getHttpServer())
+    const r = await request(app.getHttpServer())
       .get('/api/invitations')
-      .set('Authorization', `Bearer ${tokenOwner}`)
-      .expect(200)
-      .then((r) => {
-        expect(Array.isArray(r.body)).toBe(true);
-        expect(r.body[0].familyId).toBe(familyId);
-      });
+      .set(bearer(tokenOwner))
+      .expect(200);
+
+    expect(Array.isArray(r.body)).toBe(true);
+    expect(r.body[0].familyId).toBe(familyId);
   });
 
   it('POST /api/invitations/accept -> guest entra na família do owner', async () => {
-    await request(app.getHttpServer())
+    const r = await request(app.getHttpServer())
       .post('/api/invitations/accept')
-      .set('Authorization', `Bearer ${tokenGuest}`)
+      .set(bearer(tokenGuest))
       .send({ code: inviteCode })
-      .expect(201)
-      .then((r) => {
-        expect(r.body.familyId).toBe(familyId);
-      });
+      .expect(201);
+
+    expect(r.body.familyId).toBe(familyId);
 
     // guest agora deve ver duas famílias (a dele + a do owner)
-    await request(app.getHttpServer())
+    const mine = await request(app.getHttpServer())
       .get('/api/families/mine')
-      .set('Authorization', `Bearer ${tokenGuest}`)
-      .expect(200)
-      .then((r) => {
-        expect(Array.isArray(r.body)).toBe(true);
-        expect(r.body.length).toBeGreaterThanOrEqual(2);
-      });
+      .set(bearer(tokenGuest))
+      .expect(200);
+
+    expect(Array.isArray(mine.body)).toBe(true);
+    expect(mine.body.length).toBeGreaterThanOrEqual(2);
   });
 });

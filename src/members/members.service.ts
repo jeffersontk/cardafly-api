@@ -1,9 +1,14 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class MembersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private isNotFound(e: unknown): boolean {
+    return e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2025';
+  }
 
   listByFamily(familyId: string) {
     return this.prisma.member.findMany({
@@ -24,21 +29,40 @@ export class MembersService {
     return this.prisma.member.create({ data });
   }
 
-  update(
+async update(
     id: string,
     data: Partial<{
       name: string;
       genero: string;
       idade: number;
       peso: number;
-      observacoes: string;
+      observacoes: string | null;
       ativo: boolean;
     }>,
   ) {
-    return this.prisma.member.update({ where: { id }, data });
+    try {
+      return await this.prisma.member.update({
+        where: { id },
+        data,
+      });
+    } catch (e) {
+      if (this.isNotFound(e)) {
+        throw new NotFoundException('Membro não encontrado');
+      }
+      throw e;
+    }
   }
 
-  remove(id: string) {
-    return this.prisma.member.delete({ where: { id } });
+  async remove(id: string) {
+    try {
+      return await this.prisma.member.delete({
+        where: { id },
+      });
+    } catch (e) {
+      if (this.isNotFound(e)) {
+        throw new NotFoundException('Membro não encontrado');
+      }
+      throw e;
+    }
   }
 }

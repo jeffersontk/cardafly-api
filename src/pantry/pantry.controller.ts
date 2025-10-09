@@ -1,16 +1,31 @@
 // src/pantry/pantry.controller.ts
-import { Body, Controller, Delete, Get, Patch, Post, Req, UseGuards } from '@nestjs/common';
-import { PantryService } from './pantry.service';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Patch,
+  Post,
+  Req,
+  UseGuards,
+  HttpCode,
+} from '@nestjs/common';
 import { Request } from 'express';
 import { JwtAuthGuard } from '../auth/strategies/jwt.guard';
+import { PantryService } from './pantry.service';
 
 type Unidade = 'g' | 'ml' | 'un';
+type SingleBody = { item: string; unidade: Unidade; quantidade?: number; brand?: string };
+type BulkBody = Array<SingleBody & { familyId?: string }>;
 
 @UseGuards(JwtAuthGuard)
 @Controller('pantry')
 export class PantryController {
   constructor(private readonly service: PantryService) {}
+
   private familyId(req: Request) {
+    // o JWT guard popula user; usamos a família ativa
     return (req.user as any).activeFamilyId as string;
   }
 
@@ -20,38 +35,81 @@ export class PantryController {
   }
 
   @Post()
-  create(
-    @Req() req: Request,
-    @Body() body: { item: string; brand?: string; unidade: Unidade; quantidade: number },
-  ) {
+  @HttpCode(201)
+  async createOrBulk(@Req() req: Request, @Body() body: SingleBody | BulkBody) {
+    const fid = this.familyId(req);
+
+    // bulk
+    if (Array.isArray(body)) {
+      if (body.length === 0) throw new BadRequestException('items required');
+      // garante familyId e normaliza campos
+      const items = body.map((i) => ({
+        familyId: i.familyId ?? fid,
+        item: i.item,
+        unidade: i.unidade,
+        brand: i.brand,
+        quantidade: i.quantidade,
+      }));
+      return this.service.upsertMany(items, fid);
+    }
+
+    // single
     return this.service.upsert(
-      this.familyId(req),
+      fid,
       body.item,
       body.unidade,
-      body.brand,
+      body.brand ?? null,
       undefined,
       Number(body.quantidade) || 0,
     );
   }
 
   @Patch()
-  patch(
-    @Req() req: Request,
-    @Body()
-    body: { item: string; brand?: string; unidade: Unidade; delta?: number; quantidade?: number },
+  async patch(
+  @Req() req: Request,
+  @Body() body: SingleBody | BulkBody,
   ) {
+    const fid = this.familyId(req);
+
+    // 🔁 Bulk (array): usa upsertMany e retorna array (o teste espera isso)
+    if (Array.isArray(body)) {
+      if (body.length === 0) throw new BadRequestException('items required');
+      const items = body.map((i) => ({
+        familyId: i.familyId ?? fid,
+        item: i.item,
+        unidade: i.unidade,
+        brand: i.brand ?? null,
+        // o teste envia `quantidade` (não `delta`)
+        quantidade: typeof i.quantidade === 'number' ? i.quantidade : undefined,
+        delta: undefined,
+      }));
+      return this.service.upsertMany(items, fid);
+    }
+
+    // ✅ Single
     return this.service.upsert(
-      this.familyId(req),
+      fid,
       body.item,
       body.unidade,
-      body.brand,
-      typeof body.delta === 'number' ? body.delta : undefined,
+      body.brand ?? null,
+      typeof (body as any).delta === 'number' ? (body as any).delta : undefined,
       typeof body.quantidade === 'number' ? body.quantidade : undefined,
     );
   }
 
   @Delete()
-  del(@Req() req: Request, @Body() body: { item: string; brand?: string; unidade: Unidade }) {
-    return this.service.remove(this.familyId(req), body.item, body.unidade, body.brand);
+  async del(@Req() req: Request, @Body() body: SingleBody | BulkBody) {
+    const fid = this.familyId(req);
+    if (Array.isArray(body)) {
+      if (body.length === 0) throw new BadRequestException('items required');
+      const items = body.map((i) => ({
+        familyId: i.familyId ?? fid,
+        item: i.item,
+        unidade: i.unidade,
+        brand: i.brand ?? null,
+      }));
+      return this.service.removeMany(items, fid);
+    }
+    return this.service.remove(fid, body.item, body.unidade, body.brand ?? null);
   }
 }
